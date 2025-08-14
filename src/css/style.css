@@ -1,0 +1,158 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0px;
+    background-color: white;
+    font-size: 14px;    
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 4fr 96fr;
+    gap: 0px;
+    padding: 0;
+}
+
+.grid > div {
+    padding: 0px;
+    text-align: left;
+}
+
+div.left-part {
+/*    position: absolute;
+    overflow: hidden; */
+    left: 0px;
+    top: 0px;
+    width: 100%;
+/*    height: 450px; */
+    background-color: white;
+    border: solid;
+    border-width: 1px;
+    width: 60px;
+    z-index: 9999;
+}
+
+div.mx-toolbar {
+}
+
+div img.mxToolbarMode {
+    width: 95%;
+    left: 1px;
+    top: 2px;
+    height: auto;
+    display: block;
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 5px 0;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    border-radius: 8px;
+    touch-action: none;
+}
+
+
+
+div.mx-buttons {
+    overflow: hidden;
+    padding: 1px;
+    width: 100%;
+    z-index: 9999;
+}
+
+div.mx-buttons button {
+    display: inline-block;
+    float: left;
+    width: 54px;
+    margin: 2px;
+    font-size: 11px;
+}
+
+/* Изменение параметров */
+div.mx-container {
+    position:relative;
+    overflow:hidden;
+    /* width: 100%; */
+    
+    height: 100vh;
+    border:1px solid gray;
+    /* background: url('../images/wires-grid.gif'); */
+    background-position:-1px 0px;
+    cursor:default;
+    -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+div.mx-properties {
+    border: solid 1px gray; 
+    border-radius: 0.2rem;
+    right: 1px;
+    top: 0px;
+    position: absolute;
+    background-color: white;
+    z-index: 999;
+}
+
+div.text {
+    top: 800px;
+    text-align: justify;
+    padding: 20px;
+}
+
+div.mx-links {
+    position: relative;
+    border:1px solid gray;
+}
+
+.img_links {
+    max-width: 24px;
+    max-height: 24px;
+    left: 4px;
+    width: 50%;
+    height: auto;
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 5px 0;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+
+}
+
+select.mx-select {
+    margin: 2px;
+}
+
+.mx_button_img {
+    height: 24px !important;
+    width: 24px !important;
+    margin: 0px 0px 0px -4px !important;
+    max-width: 24px;
+    max-height: 24px;
+}
+
+.mx_button {
+    right: 27px !important;
+    height: 27px !important;
+    width: 27px !important;
+    background-color: white !important;
+    border: inherit;
+    padding: 0;
+}
+
+.mx_input {
+    width: 0px;
+    margin: 0px -10px -10px 0px;
+}
+
+.mx_label {
+    margin: 0px -10px 0px 4px;
+}
+
+div.mxRubberband {
+	position: absolute;
+	overflow: hidden;
+	border-style: solid;
+	border-width: 1px;
+	border-color: #0000FF;
+	background: #0077FF;
+}

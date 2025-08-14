@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Решение задач по ТОЭ</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalabale=no">
+	<!-- для сафари -->
+	<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" /> 
+	<script>
+		mxBasePath = 'src/';
+		mxLoadStylesheets = false;
+		mxLoadResources = false;
+		lang = 'ru';
+	</script>
+	<link rel="stylesheet" href="src/css/style.css">
+	<script type="text/javascript" src="mxClient.js"></script>
+	<script type="text/javascript" src="index.js"></script>
+	<script src="mobile-adaptation.js"></script>
+</head>
+<body>
+	<div class="grid">
+		<div class="left-part">
+			<div id="links" class="mx-links">
+				<a href="https://faultan.ru" target="_blank"><img src="src/images/main.png" alt="На главную" title='На главную' class="img_links"/></a>
+				<a href="https://faultan.ru/circuit_faq" target="_blank"><img src="src/images/help.png" alt="Справка" title='Справка' class="img_links"/></a>
+			</div>
+			<div id="file_io" class="mx-links">
+				<button id='open_file' class='mx_button'><input type='file' id='input_file' class='mx_input' name='input_file' accept=".flt"><label for="input_file" class='mx_label'><img src="src/images/open.png" alt='Открыть' title='Открыть' class='mx_button_img'></label></input></button>
+				<button id='save_file' class='mx_button'><img src="src/images/save.png" alt='Сохранить' title='Сохранить' class='mx_button_img'></button>
+			</div>
+			<div class="mx-links">
+				<p style="padding: 2px; margin: 0px;">Ед. изм.</p>
+				<p style="margin: 0px;"><input type="radio" id="ohm" name="calc_type" value="ohm" checked><label for="ohm">Ом</label></p>
+			    <p style="margin: 0px;"><input type="radio" id="fh" name="calc_type" value="fh"><label for="fh">Ф/Гн</label></p>
+				<p id="freq_block" style="padding: 2px; margin: 0px;">
+					f=<input type="text" id="frequency" required style="width: 14px;" value="50" disabled> Гц
+				</p>
+				<input type="checkbox" id="grid_enabled" checked><label for="grid_enabled">Сетка</label>
+			</div>
+			<div id='toolbar' class="mx-toolbar"></div>
+			<div id='buttons' class="mx-buttons"></div>
+			<div>
+				<p style="padding: 2px; margin: 2px;">Метод:</p>
+					<select id='method_selector' style="margin: 2px;" onchange="edit_selector();">
+						<option value="0">ЗК</option>
+						<option value="1">МУП</option>
+						<option value="2">МКТ</option>
+						<option value="3">МЭГ</option>
+						<option value="4">Z</option>
+					</select>
+			</div>
+			<div id='meg_block' class="mx-buttons" style="display:none;">
+				<p style="padding: 2px; margin: 2px;">Ветвь:</p>
+					<select id="branch_num" style="margin: 2px;">
+						<option value="-">-</option>
+					</select>
+					<button class="mx-buttons" onclick="define_branches();">Ветви</button>
+			</div>
+		</div>
+		<div id='container' class='mx-container'>
+			<div id='properties' class='mx-properties'></div>
+		</div>
+	</div>
+	<div>
+		<div id="result" class="text"></div>
+		<div id="vector_i_">
+			<div id="vector_i"></div>
+			<div id="vector_i_checkboxes" style="padding: 0px 20px;"></div>
+		</div>
+		<div id="vector_u_">
+			<div id="vector_u"></div>
+			<div id="vector_u_checkboxes" style="padding: 0px 20px;"></div>
+		</div>
+	</div>
+
+	<script>
+		main(true);
+	</script>
+
+	<link rel="stylesheet" href="src/js/katex/katex.min.css">
+    <script defer src="src/js/katex/katex.min.js"></script>
+    <script defer src="src/js/katex/auto-render.min.js"></script>
+    <script defer src="src/js/katex/render.js"></script>
+	<script defer src="src/js/plotly.min.js"></script>
+</body>
+</html>

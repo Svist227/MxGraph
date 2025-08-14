@@ -1,0 +1,5 @@
+askZoom=Zoom (%)
+properties=Свойства
+outline=Внешняя линия
+tasks=Задачи
+help=Справка
