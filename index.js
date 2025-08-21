@@ -260,6 +260,7 @@ mxConnectionHandler.prototype.updateCurrentState = function(me)
     }
 };
 
+
 // Updates the terminal and control points in the cloned preview.
 // mxEdgeSegmentHandler.prototype.clonePreviewState = function(point, terminal)
 // {
@@ -1155,11 +1156,11 @@ function mxIconSet(state)
 			}
                 
              // пересоздаём стрелки для этой вершины после перерисовки
-    setTimeout(() => {
-      if (g._connectors) {
-        g._connectors.showForCell(state.cell);
-      }
-    }, 0);
+    // setTimeout(() => {
+    //   if (g._connectors) {
+    //     g._connectors.showForCell(state.cell);
+    //   }
+    // }, 0);
 
 
             mxEvent.consume(evt);
@@ -1718,10 +1719,10 @@ function main(flag)
    
     
     setupTouchHandlers(graph, container);
-    // setupTooltipConnectors(graph, container);
+    setupTooltipConnectors(graph, container);
     
-const connectors = setupTooltipConnectors(graph, graph.container);
-graph._connectors = connectors;   // <— простой «шаринг» API
+// const connectors = setupTooltipConnectors(graph, graph.container);
+// graph._connectors = connectors;   // <— простой «шаринг» API
 
     calc_type = 0;
     create_toolbar('toolbar', graph, base_path, calc_type);
@@ -1912,7 +1913,7 @@ graph._connectors = connectors;   // <— простой «шаринг» API
 //     }
 
     // Grid
-    if (!is_mobile) {
+    if (1) {
         grid_path = 'url(\'https://faultan.ru/wp-content/themes/neve/my/circuit/images/wires-grid.gif\')';
 
         container.style.background = grid_path;
@@ -2080,6 +2081,8 @@ graph._connectors = connectors;   // <— простой «шаринг» API
         }
 
         connectionHandlerMouseUp.apply(this, arguments);
+        
+        
 };
 
     mxEvent.disableContextMenu(container);
@@ -2502,7 +2505,64 @@ graph._connectors = connectors;   // <— простой «шаринг» API
 
 };
 
+const OFFSET_DIST   = 20;  // расстояние от порта до стрелки (как у тебя)
+const ARROW_SIZE    = 24;  // размер иконки стрелки
+const ARROW_RADIUS  = Math.round(ARROW_SIZE / 2); // =12
+const ARROW_HIT_PAD = 8;   // дополнительный запас по радиусу стрелки для точности попадания (на палец)
+const PERP_TOL      = 10;  // полуширина коридора (насколько в стороны от линии порт→стрелка допустимо)
+const INNER_ALLOW   = 2;   // небольшая допуск внутрь порта (позволяет тапнуть по краю)
+const EXTRA_OUTER   = 6;   // запас за стрелкой наружу
+const PORT_NEAR_TOL = 10;  // маленький fallback, если тап прямо по порту (можно 0 чтобы отключить)
+const MIN_PARALLEL   = 0;   // минимальная параллельная компонента (>=0 => только наружу)
+
+
 function setupTouchHandlers(graph,container){
+function computePortAndArrow(state, constraint) {
+  const ang = totalAngleLocal(state);
+  const rp = rotateRelPointLocal(constraint.point, ang);
+
+  const portX = state.x + rp.x * state.width;
+  const portY = state.y + rp.y * state.height;
+
+  const centerX = state.x + state.width / 2;
+  const centerY = state.y + state.height / 2;
+
+  let vx = portX - centerX, vy = portY - centerY;
+  let vlen = Math.hypot(vx, vy);
+  if (vlen < 1e-6) { vx = 1; vy = 0; vlen = 1; } // fallback
+
+  const ux = vx / vlen, uy = vy / vlen;
+  const arrowX = portX + ux * OFFSET_DIST;
+  const arrowY = portY + uy * OFFSET_DIST;
+
+  return { portX, portY, arrowX, arrowY, ux, uy, vlen, centerX, centerY, rp, ang };
+}
+function rotateRelPointLocal(pt, deg) {
+  if (!pt) return pt;
+  const rad = (deg || 0) * Math.PI / 180;
+  const cx = 0.5, cy = 0.5;
+  const x = pt.x - cx, y = pt.y - cy;
+  const xr = x * Math.cos(rad) - y * Math.sin(rad);
+  const yr = x * Math.sin(rad) + y * Math.cos(rad);
+  return new mxPoint(xr + cx, yr + cy);
+}
+
+function readRotation(state) {
+  try { return parseFloat(mxUtils.getValue(state.style, mxConstants.STYLE_ROTATION, 0)) || 0; } catch { return 0; }
+}
+function readDirectionAngle(state) {
+  const dir = mxUtils.getValue(state.style, mxConstants.STYLE_DIRECTION, mxConstants.DIRECTION_EAST);
+  switch (dir) {
+    case mxConstants.DIRECTION_NORTH: return -90;
+    case mxConstants.DIRECTION_SOUTH: return  90;
+    case mxConstants.DIRECTION_WEST:  return 180;
+    default: return 0;
+  }
+}
+function totalAngleLocal(state) {
+  return (readRotation(state) + readDirectionAngle(state)) % 360;
+}
+    activeTouch = false;
     const handler = graph.connectionHandler;
      function logHandlerState(context) {
     console.log(`[${context}] connectionHandler state:`, {
@@ -2532,6 +2592,22 @@ function setupTouchHandlers(graph,container){
   activeTouch = false;
 }
     const radius = 12;
+
+function readRotation(state) {
+  try { return parseFloat(mxUtils.getValue(state.style, mxConstants.STYLE_ROTATION, 0)) || 0; }
+  catch { return 0; }
+}
+
+function readDirectionAngle(state) {
+  const dir = mxUtils.getValue(state.style, mxConstants.STYLE_DIRECTION, mxConstants.DIRECTION_EAST);
+  switch (dir) {
+    case mxConstants.DIRECTION_NORTH: return -90;
+    case mxConstants.DIRECTION_SOUTH: return  90;
+    case mxConstants.DIRECTION_WEST:  return 180;
+    default: return 0; // EAST
+  }
+}
+
     
  function resetHandler(handler) {
   try {
@@ -2559,151 +2635,126 @@ function setupTouchHandlers(graph,container){
 
 
 
-  container.addEventListener('touchstart', function (event) {
-//     const touch = event.touches[0];
-//   const pt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
-//   const cell = graph.getCellAt(pt.x, pt.y);
-//   const isPreviewVisible = handler.shape != null || handler.first != null;
+container.addEventListener('touchstart', function (event) {
+  if (event.touches.length === 0) return;
 
-//   logHandlerState('TOUCHSTART - BEGIN');
+  const touch = event.touches[0];
+  const touchPt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
 
-//   // 💥 Независимо от места — убиваем зависшее соединение
-//   if (isPreviewVisible) {
-//     console.warn('[TOUCHSTART] 🔄 Принудительный сброс перед новым соединением');
-//     safelyResetConnection(handler);
-//     activeTouch = false;
-//   }
-
-//   if (!cell) {
-//     console.log('[TOUCHSTART] ❌ Пустой тап — выход');
-//     logHandlerState('TOUCHSTART - TAP EMPTY AREA');
-//     return;
-//   }
-
-//   const state = graph.view.getState(cell);
-//   if (!state) return;
-
-//   const constraints = graph.getAllConnectionConstraints(state);
-//   if (!constraints || constraints.length === 0) return;
-
-//   const touchPt = pt;
-//   let matchedConstraint = null;
-
-//   for (const constraint of constraints) {
-//     const portPt = graph.view.getConnectorPoint(state, constraint);
-//     if (portPt) {
-//       const dx = portPt.x - touchPt.x;
-//       const dy = portPt.y - touchPt.y;
-//       const dist = Math.sqrt(dx * dx + dy * dy);
-//       if (dist < radius) {
-//         matchedConstraint = constraint;
-//         break;
-//       }
-//     }
-//   }
-
-//   if (matchedConstraint) {
-//     // ⏱️ Короткий таймаут, чтобы дать сбросу завершиться
-//     setTimeout(() => {
-//       if (handler.shape || handler.first) {
-//         console.warn('[TOUCHSTART] 🛑 shape или first не были сброшены!');
-//         safelyResetConnection(handler);
-//       }
-
-//       console.log('[TOUCHSTART] ✅ Начинаем соединение от порта');
-//       handler.sourceConstraint = matchedConstraint;
-//       handler.start(state, matchedConstraint);
-//       activeTouch = true;
-
-//       logHandlerState('TOUCHSTART - AFTER START');
-//     }, 10); // Можно увеличить до 20–30, если нужно
-//   }
-// }, { passive: false });
-
-// // вынесем в функцию
-// function safelyResetConnection(handler) {
-//   try {
-//     if (handler.shape) {
-//       handler.shape.destroy();
-//     }
-//   } catch (e) {
-//     console.warn('[RESET] Error destroying shape:', e);
-//   }
-
-//   handler.shape = null;
-//   handler.edgeState = null;
-//   handler.previous = null;
-//   handler.first = null;
-//   handler.currentState = null;
-//   handler.sourceConstraint = null;
-
-//   if (typeof handler.reset === 'function') {
-//     handler.reset();
-//   }
-
-//   console.log('[RESET] 🧹 Все сброшено');}
-
-    const touch = event.touches[0];
-  const pt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
-  const cell = graph.getCellAt(pt.x, pt.y);
-
-  const isPreviewVisible =
-    handler.shape != null || handler.first != null || handler.edgeState != null;
-
+  const isPreviewVisible = handler.shape != null || handler.first != null || handler.edgeState != null;
   logHandlerState('TOUCHSTART - BEGIN');
 
-  if (!cell) {
-    // Пустой тап — возможно, сброс
-    if (isPreviewVisible) {
-      console.log('[TOUCHSTART] ❌ Пустой тап, сбрасываем висящую линию');
-      resetHandler(handler);
-    }
-    logHandlerState('TOUCHSTART - TAP EMPTY AREA');
-    return;
-  }
-
-  const state = graph.view.getState(cell);
-  if (!state) {
-    console.warn('[TOUCHSTART] ⚠️ state отсутствует');
-    return;
-  }
-
-  const constraints = graph.getAllConnectionConstraints(state);
-  if (!constraints || constraints.length === 0) {
-    console.warn('[TOUCHSTART] ⚠️ У вершины нет портов (connection constraints)');
-    return;
-  }
-
-  const radius = 12;
-  const touchPt = pt;
+  // ----- Поиск соответствия: сначала попали по ячейке? -----
   let matchedConstraint = null;
+  let matchedState = null;
 
-  for (const constraint of constraints) {
-    const portPt = graph.view.getConnectorPoint(state, constraint);
-    if (portPt) {
-      const dx = portPt.x - touchPt.x;
-      const dy = portPt.y - touchPt.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < radius) {
-        matchedConstraint = constraint;
-        break;
+  // 1) Попытка: cell под точкой (быстрая)
+  let cell = graph.getCellAt(touchPt.x, touchPt.y);
+  if (cell) {
+    const state = graph.getView().getState(cell);
+    if (state) {
+      // ищем по портам внутри this state
+      const constraints = graph.getAllConnectionConstraints(state) || [];
+      for (const c of constraints) {
+        if (!c || !c.point) continue;
+        const pos = computePortAndArrow(state, c);
+        // приоритет: попадание по центру стрелки
+        const dArrow = Math.hypot(pos.arrowX - touchPt.x, pos.arrowY - touchPt.y);
+        if (dArrow <= (ARROW_RADIUS + ARROW_HIT_PAD)) {
+          matchedConstraint = c; matchedState = state; break;
+        }
+        // иначе — коридор (наружная зона)
+        const rx = touchPt.x - pos.portX, ry = touchPt.y - pos.portY;
+        const p = rx * pos.ux + ry * pos.uy;
+        const s = Math.abs(rx * (-pos.uy) + ry * pos.ux);
+        const outerTol = OFFSET_DIST + ARROW_RADIUS + ARROW_HIT_PAD + EXTRA_OUTER;
+        if (p >= MIN_PARALLEL && p <= outerTol && s <= PERP_TOL) {
+          matchedConstraint = c; matchedState = state; break;
+        }
+        
       }
     }
   }
 
-  if (matchedConstraint) {
-    console.log('[TOUCHSTART] ✅ Найден порт. Сброс и отложенный старт соединения');
-    resetHandler(handler); // Сброс перед началом
+  // 2) Если не найдено и тап вне ячейки: пробегаем по всем вершинам (ищем внешний коридор)
+  if (!matchedConstraint) {
+    const parent = graph.getDefaultParent();
+    const vertices = graph.getChildVertices(parent) || [];
+    for (const v of vertices) {
+      const state = graph.getView().getState(v);
+      if (!state) continue;
+      const constraints = graph.getAllConnectionConstraints(state) || [];
+      for (const c of constraints) {
+        if (!c || !c.point) continue;
+        const pos = computePortAndArrow(state, c);
+        // стрелка имеет приоритет
+        const dArrow = Math.hypot(pos.arrowX - touchPt.x, pos.arrowY - touchPt.y);
+        if (dArrow <= (ARROW_RADIUS + ARROW_HIT_PAD)) {
+          matchedConstraint = c; matchedState = state; break;
+        }
+        const rx = touchPt.x - pos.portX, ry = touchPt.y - pos.portY;
+        const p = rx * pos.ux + ry * pos.uy;
+        const s = Math.abs(rx * (-pos.uy) + ry * pos.ux);
+        const outerTol = OFFSET_DIST + ARROW_RADIUS + ARROW_HIT_PAD + EXTRA_OUTER;
+        if (p >= MIN_PARALLEL && p <= outerTol && s <= PERP_TOL) {
+          // сохраняем лучший вариант (по простоте — берём первый; можно усложнить scoring)
+          matchedConstraint = c; matchedState = state; break;
+        }
+      }
+      if (matchedConstraint) break;
+    }
+  }
 
-    // Гарантируем, что reset завершится до старта
+  // 3) Результат
+  if (matchedConstraint && matchedState) {
+    // require that arrows are present on this cell before starting connection
+const cellId = matchedState && matchedState.cell && matchedState.cell.id;
+if (!cellId) {
+  console.warn('[TOUCHSTART] matchedState has no cell id — abort start');
+  return;
+}
+
+// быстрый sync-проверка в DOM
+const selector = `.connector-arrow[data-cell-id="${cellId}"]`;
+let hasArrows = !!container.querySelector(selector);
+
+if (!hasArrows) {
+  // небольшая попытка через rAF — на случай, если стрелки создавались прямо перед этим и ещё не в DOM
+  requestAnimationFrame(() => {
+    if (container.querySelector(selector)) {
+      // стрелки появились — продолжаем (повторный start)
+      console.log('[TOUCHSTART] arrows appeared during rAF — proceeding to start');
+      resetHandler(handler);
+      handler.sourceConstraint = matchedConstraint;
+      handler.start(matchedState, matchedConstraint);
+      activeTouch = true;
+      logHandlerState('TOUCHSTART - AFTER START (rAF path)');
+    } else {
+      console.log('[TOUCHSTART] no arrows for cell -> abort start');
+    }
+  });
+
+  // НЕ начинаем соединение сейчас — дождёмся rAF-пути выше
+  return;
+}
+
+    console.log('[TOUCHSTART] ✅ Найден matchedConstraint (наружная зона или стрелка)', matchedConstraint);
+    resetHandler(handler); // твоя функция
     requestAnimationFrame(() => {
       handler.sourceConstraint = matchedConstraint;
-      handler.start(state, matchedConstraint);
+      handler.start(matchedState, matchedConstraint);
       activeTouch = true;
       logHandlerState('TOUCHSTART - AFTER START');
     });
+    return;
   } else {
-    console.log('[TOUCHSTART] ❌ Порт не задет — соединение не начато');
+    // не найдено: если есть висящий preview — сбрасываем, иначе ничего
+    if (isPreviewVisible) {
+      console.log('[TOUCHSTART] ❌ нет совпадения, сбрасываем висящий preview');
+      resetHandler(handler);
+    } else {
+      console.log('[TOUCHSTART] ❌ нет совпадения и нет preview');
+    }
   }
 
   logHandlerState('TOUCHSTART - END');
@@ -2712,21 +2763,47 @@ function setupTouchHandlers(graph,container){
 
 
   container.addEventListener('touchend', function (event) {
-    if (!activeTouch) return;
-    const touch = event.changedTouches[0];
-    const mouseEvent = new MouseEvent('mouseup', {
-      clientX: touch.clientX,
-      clientY: touch.clientY,
-      screenX: touch.screenX,
-      screenY: touch.screenY,
-      bubbles: true,
-      cancelable: true,
-      view: window
-    });
-    container.dispatchEvent(mouseEvent);
-    activeTouch = false;
-    logHandlerState('TOUCHEND');
-  }, { passive: false });
+  if (!activeTouch) return;
+  const touch = event.changedTouches[0];
+  const touchPt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
+
+  // --- ищем ближайший порт (увеличенный радиус)
+  const SNAP_RADIUS = 100; // ← вот этим управляешь "легкостью попадания"
+  let snapX = touchPt.x;
+  let snapY = touchPt.y;
+
+  const parent = graph.getDefaultParent();
+  const vertices = graph.getChildVertices(parent) || [];
+  outer: for (const v of vertices) {
+    const state = graph.getView().getState(v);
+    if (!state) continue;
+    const constraints = graph.getAllConnectionConstraints(state) || [];
+    for (const c of constraints) {
+      if (!c?.point) continue;
+      const pos = computePortAndArrow(state, c);
+      const dPort = Math.hypot(pos.portX - touchPt.x, pos.portY - touchPt.y);
+      if (dPort <= SNAP_RADIUS) {
+        snapX = pos.portX;
+        snapY = pos.portY;
+        console.log("[TOUCHEND] 🎯 Привязали к ближайшему порту", c.point);
+        break outer;
+      }
+    }
+  }
+
+  // --- отправляем скорректированную позицию
+  const mouseEvent = new MouseEvent('mouseup', {
+    clientX: snapX,
+    clientY: snapY,
+    bubbles: true,
+    cancelable: true,
+    view: window
+  });
+  container.dispatchEvent(mouseEvent);
+
+  activeTouch = false;
+  logHandlerState('TOUCHEND');
+}, { passive: false });
 
 
 }
@@ -2736,6 +2813,66 @@ function setupTouchHandlers(graph,container){
 function setupTooltipConnectors(graph, container) {
     
     // --- helpers
+    function beginFromArrow(arrow, clientX, clientY) {
+        console.log('только для декстопа')
+         if (graph.connectionHandler.edgeState) {
+        graph.getView().removeState(graph.connectionHandler.edgeState);
+        graph.connectionHandler.edgeState = null;
+    }
+        clearArrows(); // 💥 убираем подсказки сразу, как только пользователь начал соединение
+  const handler = graph.connectionHandler;
+
+  // Жёсткий сброс
+  try { if (handler.shape) handler.shape.destroy(); } catch {}
+  handler.shape = null;
+  handler.edgeState = null;
+  handler.previous = null;
+  handler.first = null;
+  handler.currentState = null;
+  handler.sourceConstraint = null;
+   handler.reset();
+
+  // --- гарантируем актуальный state ---
+  graph.getView().validate();
+  const cell = graph.getModel().getCell(arrow.cellId);
+  const state = graph.getView().getState(cell);
+  if (!state) {
+    console.warn('[ARROW] Нет актуального state для cellId=', arrow.cellId);
+    return;
+  }
+
+  // --- проверяем constraint ---
+  const allConstraints = graph.getAllConnectionConstraints(state) || [];
+  const validConstraint = allConstraints.find(c =>
+    c?.point?.x === arrow.constraint?.point?.x &&
+    c?.point?.y === arrow.constraint?.point?.y
+  );
+  if (!validConstraint) {
+    console.warn('[ARROW] Constraint невалиден для cellId=', arrow.cellId, arrow.constraint);
+    return;
+  }
+
+
+  // Стартуем соединение
+  requestAnimationFrame(() => {
+    handler.sourceConstraint = validConstraint; // сырое c
+    handler.start(state, validConstraint);
+    
+    // 👉 сразу «двигаем» хвост к текущей точке, чтобы превью появилось
+    if (typeof clientX === 'number' && typeof clientY === 'number') {
+      const moveEvt = new MouseEvent('mousemove', {
+        clientX, clientY, bubbles: true, cancelable: true, view: window
+      });
+      container.dispatchEvent(moveEvt);
+
+      console.log('[ARROW] После start:', {
+      first: handler.first,
+      previous: handler.previous,
+      currentState: handler.currentState
+    });
+    }
+  });
+}
   function rotateRelPoint(pt, deg) {
     if (!pt) return pt;
     const rad = (deg || 0) * Math.PI / 180;
@@ -2797,7 +2934,7 @@ const hitRadius = 40;
 
   }
 
-  function createArrow(pt, center, rotation,startConnectFn) {    
+  function createArrow(pt, center, rotation,cell, rawConstraint) {    
     // вычисляем единичный вектор от центра к порту
 
     let dx = pt.x - center.x, dy = pt.y - center.y;
@@ -2818,7 +2955,7 @@ const hitRadius = 40;
 
     img.src    = 'src/images/arrow-up.svg';
     img.className = 'connector-arrow'; 
-
+img.dataset.cellId = cell.id;
     img.draggable = false;
 
     img.ondragstart = () => false;
@@ -2852,7 +2989,8 @@ const hitRadius = 40;
         el: img,
         centerX: x,
         centerY: y,
-        startConnectFn
+        cellId: cell.id,        // << храним id, а не state
+    constraint: rawConstraint // << именно ОРИГИНАЛЬНЫЙ c
     });
 
     
@@ -2911,18 +3049,13 @@ const ang = totalAngle(state); // <-- direction + rotation
       // угол иконки по реальному вектору
       const arrowAngle = vectorToCardinalAngle(pt.x - center.x, pt.y - center.y);
 
-    const startConnectFn = (clientX, clientY) => {
-    graph.connectionHandler.sourceConstraint = c;
-
-    graph.connectionHandler.start(state, c);
-    }
-    createArrow(pt, center, arrowAngle,startConnectFn);
+    createArrow(pt, center, arrowAngle,state.cell, c);
 
   }
   }
 
-  container.addEventListener('mousedown', e => {
-
+  container.addEventListener('pointerdown', e => {
+if (e.pointerType !== 'mouse') return; // только реальная мышь
     const rect = container.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
@@ -2932,27 +3065,9 @@ const ang = totalAngle(state); // <-- direction + rotation
         const dy = clickY - arrow.centerY;
         
            if (Math.hypot(dx, dy) <= arrowSize / 2) {
-            e.stopPropagation();
-            e.preventDefault();
-            // 🧹 Жёсткий сброс предварительной линии
-      const handler = graph.connectionHandler;
-      try {
-        if (handler.shape) handler.shape.destroy();
-      } catch (err) {
-        console.warn('Ошибка destroy shape', err);
-      }
-      handler.shape = null;
-      handler.edgeState = null;
-      handler.previous = null;
-      handler.first = null;
-      handler.currentState = null;
-      handler.sourceConstraint = null;
-
-      if (typeof handler.reset === 'function') {
-        handler.reset();
-      }
-            arrow.startConnectFn(e.clientX, e.clientY);
-            break;
+        
+            beginFromArrow(arrow, e.clientX, e.clientY);
+      break;
         }
         
     }
@@ -3035,11 +3150,31 @@ let cursorActive = false;
 
   });
 
+//   container.addEventListener('mouseup', () => {
+//     if (graph.connectionHandler.edgeState) {
+//         graph.getView().removeState(graph.connectionHandler.edgeState);
+//         graph.connectionHandler.edgeState = null;
+//     }
+// });
   
+
+
+        
+
+        
+//       }
+//     }
+//   }, { passive: false });
   
-  
-  
-  
+  function forceClear() {
+  hoverCell = null;
+  activeHover = false;
+  activeTouch = false;
+  clearArrows();
+}
+
+graph.connectionHandler.addListener(mxEvent.CONNECT, forceClear);
+graph.connectionHandler.addListener(mxEvent.RESET, forceClear);
 
   // Моб: окончание тапа = сброс соединения
 
@@ -3049,27 +3184,12 @@ let cursorActive = false;
 
     graph.connectionHandler.reset();
 
-    activeTouch = false;
-
+     forceClear();
     }
-
+     activeTouch = false;
   }, { passive: false });
 
   
-
-  // Глобальный сброс по mouseup
-
-  document.addEventListener('mouseup', () => {
-
-    if (graph.connectionHandler.first || graph.connectionHandler.edgeState) {
-
-    graph.connectionHandler.reset();
-
-    activeTouch = false;
-
-    }
-
-  });
 
   
   
@@ -3093,12 +3213,20 @@ let cursorActive = false;
 });
   
 
+graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt) {
+  clearArrows();
+   activeTouch = false; // сброс состояния
+});
+graph.connectionHandler.addListener(mxEvent.RESET, () => {
+  clearArrows(); // если соединение сброшено
+   activeTouch = false; // сброс состояния
+});
   
   // ВАЖНО: вернуть наружу методы
   return {
     showForCell(cell) { showArrows(cell); },
     clear() { clearArrows(); },
-    // refresh() { refresh(); }
+     getArrows() { return arrows; }
   };
 
   }
