@@ -949,7 +949,7 @@ function addToolbarItem(graph, toolbar, prototype, image)
         
 
         var vertex = graph.getModel().cloneCell(prototype);
-         console.log('Размер вершины:', vertex.geometry.width, vertex.geometry.height);
+        //  console.log('Размер вершины:', vertex.geometry.width, vertex.geometry.height);
         vertex.geometry.x = pt.x;
         vertex.geometry.y = pt.y;
 
@@ -1127,78 +1127,144 @@ function change_elements(graph, calc_type) {
     }
 }
 
-function mxIconSet(state)
-{
-    this.images = [];
+// ---- Патч: более "вежливая" версия mxIconSet ----
+function mxIconSet(state) {
+  this.state = state;
+  this.graph = state.view.graph;
+  this.container = this.graph.container;
+  this.images = [];
+  this.iconW = 16;
+  this.iconH = 16;
+  this.padding = 6; // расстояние вне элемента
+  this._rafPending = false;
 
-    // Иконка для поворота
-    var img = mxUtils.createImage(base_path + 'images/rotate.gif');
-    img.setAttribute('title', translator.rotate);
-    img.style.position = 'absolute';
-    img.style.cursor = 'pointer';
-    img.style.width = '16px';
-    img.style.height = '16px';
-    img.style.left = (state.x + state.width) + 'px';
-    img.style.top = (state.y - 16) + 'px';
+  const basePath = typeof base_path !== 'undefined' ? base_path : '';
 
-    mxEvent.addGestureListeners(img,
-        mxUtils.bind(this, function(evt)
-        {
-            var stroke = mxUtils.getValue(state.style, mxConstants.STYLE_STROKECOLOR, mxConstants.NONE);
-			var fill = mxUtils.getValue(state.style, mxConstants.STYLE_FILLCOLOR, mxConstants.NONE);
-
-			if (state.view.graph.model.isVertex(state.cell) && stroke == mxConstants.NONE && fill == mxConstants.NONE) {
-				var angle = mxUtils.mod(mxUtils.getValue(state.style, mxConstants.STYLE_ROTATION, 0) + 90, 360);
-				state.view.graph.setCellStyles(mxConstants.STYLE_ROTATION, angle, [state.cell]);
-			}
-			else {
-				state.view.graph.turnShapes([state.cell]);
-			}
-                
-             // пересоздаём стрелки для этой вершины после перерисовки
-    // setTimeout(() => {
-    //   if (g._connectors) {
-    //     g._connectors.showForCell(state.cell);
-    //   }
-    // }, 0);
-
-
-            mxEvent.consume(evt);
-        })
-    );
-
-
-    state.view.graph.container.appendChild(img);
-    this.images.push(img);
-
-    // Иконка для удаления элемента
-    var img = mxUtils.createImage(base_path + 'images/delete.png');
-    img.setAttribute('title', translator.delete_button);
-    img.style.position = 'absolute';
-    img.style.cursor = 'pointer';
-    img.style.width = '16px';
-    img.style.height = '16px';
-    img.style.left = (state.x + state.width) + 'px';
-    img.style.top = (state.y + 38) + 'px';
-
-    mxEvent.addGestureListeners(img,
-        mxUtils.bind(this, function(evt) {
-			mxEvent.consume(evt);
-		})
-	);
-
-    mxEvent.addListener(img, 'click',
-        mxUtils.bind(this, function(evt) {
-            this.destroy();
-            state.view.graph.removeCells([state.cell]);
-            mxEvent.consume(evt);
-        })
-    );
-
-    state.view.graph.container.appendChild(img);
-    this.images.push(img);
-
+  // helper: остановить всплытие (touch/mouse)
+  // 1) мягкая версия стопа (заменяет stopAll)
+const stopAll = (evt) => {
+  try { evt.stopPropagation && evt.stopPropagation(); } catch(e){}
+  try { mxEvent.consume(evt); } catch(e){}
+  // НИКАКОГО preventDefault() — чтобы не ломать системные жесты/стрелки
 };
+
+  // ---- rotate icon ----
+  const rotateImg = mxUtils.createImage(basePath + 'images/rotate.gif');
+  rotateImg.className = 'mx-icon mx-icon-rotate';
+  rotateImg.dataset.cellId = state.cell && state.cell.id;
+  rotateImg.setAttribute('title', (typeof translator !== 'undefined' ? translator.rotate : 'Rotate'));
+  Object.assign(rotateImg.style, {
+    position: 'absolute',
+    cursor: 'pointer',
+    width: this.iconW + 'px',
+    height: this.iconH + 'px',
+    pointerEvents: 'auto',
+    touchAction: 'none' // не позволяем браузеру перехватывать жесты на иконке
+  });
+
+  // жесты и также стоп распространения
+  mxEvent.addGestureListeners(rotateImg, mxUtils.bind(this, function(evt) {
+    stopAll(evt);
+    try {
+      const stroke = mxUtils.getValue(this.state.style, mxConstants.STYLE_STROKECOLOR, mxConstants.NONE);
+      const fill = mxUtils.getValue(this.state.style, mxConstants.STYLE_FILLCOLOR, mxConstants.NONE);
+
+      if (this.state.view.graph.model.isVertex(this.state.cell) && stroke == mxConstants.NONE && fill == mxConstants.NONE) {
+        const angle = mxUtils.mod(mxUtils.getValue(this.state.style, mxConstants.STYLE_ROTATION, 0) + 90, 360);
+        this.state.view.graph.setCellStyles(mxConstants.STYLE_ROTATION, angle, [this.state.cell]);
+      } else {
+        this.state.view.graph.turnShapes([this.state.cell]);
+      }
+    } catch (err) {
+      console.warn('rotate icon click error', err);
+    }
+  }));
+
+  
+
+  this.container.appendChild(rotateImg);
+  this.images.push(rotateImg);
+
+  // ---- delete icon ----
+  const delImg = mxUtils.createImage(basePath + 'images/delete.png');
+  delImg.className = 'mx-icon mx-icon-delete';
+  delImg.dataset.cellId = state.cell && state.cell.id;
+  delImg.setAttribute('title', (typeof translator !== 'undefined' ? translator.delete_button : 'Delete'));
+  Object.assign(delImg.style, {
+    position: 'absolute',
+    cursor: 'pointer',
+    width: this.iconW + 'px',
+    height: this.iconH + 'px',
+    pointerEvents: 'auto',
+    touchAction: 'none'
+  });
+
+  
+
+  mxEvent.addListener(delImg, 'click', mxUtils.bind(this, function(evt) {
+    stopAll(evt);
+    try {
+      this.destroy();
+      this.state.view.graph.removeCells([this.state.cell]);
+    } catch (err) {
+      console.warn('delete icon click error', err);
+    }
+  }));
+
+  this.container.appendChild(delImg);
+  this.images.push(delImg);
+
+  // ---- update (throttled) ----
+  this._scheduleUpdate = mxUtils.bind(this, function() {
+    if (this._rafPending) return;
+    this._rafPending = true;
+    requestAnimationFrame(mxUtils.bind(this, function() {
+      this._rafPending = false;
+      this._doUpdate();
+    }));
+  });
+
+  this._doUpdate = mxUtils.bind(this, function() {
+    if (!this.images) return
+    const s = this.graph.getView().getState(this.state.cell);
+    if (!s) {
+      this.images.forEach(img => { img.style.display = 'none'; });
+      return;
+    }
+
+    this.images.forEach(img => { img.style.display = ''; });
+
+    // позиционирование: внешний верхний правый и внешний нижний правый
+    rotateImg.style.left = Math.round(s.x + s.width - this.iconW / 2) + 'px';
+    rotateImg.style.top  = Math.round(s.y - this.iconH - this.padding) + 'px';
+
+    delImg.style.left = Math.round(s.x + s.width - this.iconW / 2) + 'px';
+    delImg.style.top  = Math.round(s.y + s.height + this.padding) + 'px';
+  });
+
+  // ---- listeners: разумный набор (только SCALE/TRANSLATE/CHANGE) ----
+  this._modelListener = this.graph.getModel().addListener(mxEvent.CHANGE, this._scheduleUpdate);
+  this._scaleListener = this.graph.getView().addListener(mxEvent.SCALE, this._scheduleUpdate);
+  this._translateListener = this.graph.getView().addListener(mxEvent.TRANSLATE, this._scheduleUpdate);
+  // также обновим сразу
+  this._scheduleUpdate();
+
+
+
+   // --- удаляем иконки при начале pinch-жеста (2 пальца) ---
+  this.touchHandler = (evt) => {
+    if (evt.touches.length === 2) {
+      stopAll(evt);
+      this.destroy();
+       
+    }
+  };
+
+  this.container.addEventListener('touchstart', this.touchHandler, { passive: true });
+
+}
+
+
 
 mxIconSet.prototype.destroy = function()
 {
@@ -1212,6 +1278,9 @@ mxIconSet.prototype.destroy = function()
     }
 
     this.images = null;
+
+  
+
 };
 
 mxGraph.prototype.turnShapes = function(cells, backwards)
@@ -1719,7 +1788,10 @@ function main(flag)
    
     
     setupTouchHandlers(graph, container);
-    setupTooltipConnectors(graph, container);
+   const connectorsApi = setupTooltipConnectors(graph, container);
+    const zoomController = setupPinchZoom(graph, graph.container, { minScale: 0.25, maxScale: 3 });
+ 
+
     
 // const connectors = setupTooltipConnectors(graph, graph.container);
 // graph._connectors = connectors;   // <— простой «шаринг» API
@@ -1752,7 +1824,8 @@ function main(flag)
     graph.centerZoom = true;
     graph.view.scale = 1;
     graph.setPanning(true);
-
+// сразу после создания graph
+graph.setHtmlLabels(true);
     graph.setConnectable(true);
     graph.setConnectableEdges(true);
     graph.setDisconnectOnMove(false);
@@ -1774,8 +1847,284 @@ function main(flag)
     graph.setEnterStopsCellEditing(true);
 
     // Adds rubberband selection
-    var rubberband = new mxRubberband(graph);
+    let holdTimer;
 
+
+
+    // Кооректировка прямоугольного квадратика копирования на мобильных устройстваз
+
+
+var rubberband = new mxRubberband(graph);
+graph._rubberband = rubberband;
+
+// Защита: не позволяем mxRubberband стартовать через mouseDown, если блок установлен.
+// (Это предотвращает маленькие артефакты от синтетических mouse событий.)
+if (!mxRubberband.__mouseDownPatched) {
+  const originalMouseDown = mxRubberband.prototype.mouseDown;
+  mxRubberband.prototype.mouseDown = function(sender, me) {
+    try {
+      if (mxRubberband.__blockedUntil && Date.now() < mxRubberband.__blockedUntil) {
+        try { if (this.first != null) this.reset(); } catch(e) {}
+        return;
+      }
+    } catch(e) {}
+    return originalMouseDown.apply(this, arguments);
+  };
+  mxRubberband.__mouseDownPatched = true;
+}
+
+
+// if (!mxRubberband.__executeLogged) {
+//   const origExecute = mxRubberband.prototype.execute;
+//   mxRubberband.prototype.execute = function(me) {
+//     try {
+//       console.log('[rubberband] execute called, this.first=', this.first, 'current=', this.currentX, this.currentY, 'arg=', me && (me.getGraphX ? me.getGraphX() + ',' + me.getGraphY() : me.clientX + ',' + me.clientY));
+//     } catch(e){}
+//     return origExecute.apply(this, arguments);
+//   };
+//   mxRubberband.__executeLogged = true;
+// }
+
+
+// (function installRubberbandPinchGuard(graph, rubberband) {
+//   if (!graph || !rubberband) return;
+//   // Защита — не ставим дважды
+//   if (mxRubberband.__pinchGuardInstalled) return;
+//   mxRubberband.__pinchGuardInstalled = true;
+
+//   const container = graph.container;
+//   const pointerSet = new Set();
+//   let pinchActive = false;
+//   let mouseBlocker = null;
+//   let watchdog = null;
+
+//   const WATCHDOG_MS = 1500; // если ничего не поменялось — перепроверим через это время
+
+//   function installMouseBlocker() {
+//     if (mouseBlocker) return;
+//     mouseBlocker = function(evt) {
+//       try { evt.stopImmediatePropagation && evt.stopImmediatePropagation(); } catch(e){}
+//       try { evt.stopPropagation && evt.stopPropagation(); } catch(e){}
+//       // НЕ вызываем preventDefault — важно
+//     };
+//     document.addEventListener('mousedown', mouseBlocker, true);
+//     document.addEventListener('click', mouseBlocker, true);
+//   }
+//   function removeMouseBlocker() {
+//     if (!mouseBlocker) return;
+//     try {
+//       document.removeEventListener('mousedown', mouseBlocker, true);
+//       document.removeEventListener('click', mouseBlocker, true);
+//     } catch(e){}
+//     mouseBlocker = null;
+//   }
+
+//   function clearWatchdog() {
+//     if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+//   }
+//   function startWatchdog() {
+//     clearWatchdog();
+//     watchdog = setTimeout(() => {
+//       // если спустя некоторое время pointerSet уменьшился — завершаем pinch
+//       if (pinchActive && pointerSet.size < 2) {
+//         onPinchEnd();
+//       }
+//     }, WATCHDOG_MS);
+//   }
+
+//   function onPinchStart() {
+//     if (pinchActive) return;
+//     pinchActive = true;
+//     clearWatchdog();
+//     try { rubberband.reset(); } catch(e){}
+//     try { rubberband.setEnabled(false); } catch(e){}
+//     installMouseBlocker();
+//     startWatchdog();
+//   }
+
+//   function onPinchEnd() {
+//     clearWatchdog();
+//     // Небольшая отложенная проверка (чтобы синтетические mouse события успели прийти)
+//     setTimeout(() => {
+//       if (pointerSet.size < 2 && pinchActive) {
+//         pinchActive = false;
+//         try { rubberband.setEnabled(true); } catch(e){}
+//         removeMouseBlocker();
+//       }
+//     }, 0);
+//   }
+
+//   // Удаляет id указателя и вызывает проверку
+//   function handlePointerEnd(id) {
+//     pointerSet.delete(id);
+//     if (pointerSet.size < 2) {
+//       onPinchEnd();
+//     } else {
+//       startWatchdog();
+//     }
+//   }
+
+//   (function watchSelectionModel() {
+//   try {
+//     const sm = graph.getSelectionModel && graph.getSelectionModel();
+//     if (!sm || sm.__watchInstalled) return;
+//     sm.__watchInstalled = true;
+
+//     sm.addListener(mxEvent.CHANGE, function(sender, evt) {
+//       try {
+//         const sel = graph.getSelectionCells ? graph.getSelectionCells() : [];
+//         console.log('[selectionModel] CHANGE -> selected count=', (sel && sel.length) || 0, sel);
+//         if ((sel && sel.length) === 0) {
+//           // лог стек-трейса чтобы увидеть кто мог сбросить
+//           try { throw new Error('selectionCleared'); } catch (err) { console.log('[selectionModel] cleared stack', err.stack); }
+//         }
+//       } catch(e) { console.warn('selectionModel listener error', e); }
+//     });
+//   } catch (e) { console.warn('watchSelectionModel failed', e); }
+// })();
+// (function watchGlobalPointer() {
+//   const log = (t, e) => {
+//     try {
+//       console.log('[global-event]', t, 'type=', e.type, 'client=', e.clientX, e.clientY, 'time=', Date.now());
+//     } catch(e) {}
+//   };
+//   document.addEventListener('pointerdown', (e) => log('pointerdown', e), true);
+//   document.addEventListener('mousedown', (e) => log('mousedown', e), true);
+//   // можно убрать позже
+// })();
+
+
+// (function patchMxGraphClickSuppress() {
+//   if (mxGraph.__clickSuppressPatched) return;
+//   const origClick = mxGraph.prototype.click;
+//   const SUPPRESS_MS = 400; // сколько мс подавлять click после rubber selection (можно корректировать)
+//   mxGraph.prototype.click = function(evt) {
+//     try {
+//       // если граф пометили как "только что сделали selection через rubber", подавляем click
+//       if (this.__suppressClickAfterRubber && (Date.now() - this.__suppressClickAfterRubber) < SUPPRESS_MS) {
+//         console.log('[mxGraph] click suppressed after rubber (within', SUPPRESS_MS, 'ms)');
+//         return; // не вызываем оригинальный click -> не будет clearSelection
+//       }
+//     } catch (err) {
+//       // ignore
+//     }
+//     return origClick.apply(this, arguments);
+//   };
+//   mxGraph.__clickSuppressPatched = true;
+// })();
+//   // PointerEvents (предпочтительно)
+//   if (window.PointerEvent) {
+//     container.addEventListener('pointerdown', function (e) {
+//       if (e.pointerType !== 'touch') return;
+//       pointerSet.add(e.pointerId);
+//       if (pointerSet.size >= 2) {
+//         onPinchStart();
+//       }
+//     }, { capture: true, passive: true });
+
+//     // Удаляем как на контейнере, так и на документе (чтобы поймать pointerup вне контейнера)
+//     const pointerEnd = function (e) {
+//       if (e.pointerType !== 'touch') return;
+//       handlePointerEnd(e.pointerId);
+//     };
+
+//     container.addEventListener('pointerup', pointerEnd, { capture: true, passive: true });
+//     container.addEventListener('pointercancel', pointerEnd, { capture: true, passive: true });
+
+//     // document listeners — на случай, если палец ушёл за пределы контейнера/окна
+//     document.addEventListener('pointerup', pointerEnd, { capture: true, passive: true });
+//     document.addEventListener('pointercancel', pointerEnd, { capture: true, passive: true });
+
+//     // pointerout/pointerleave мы не удаляем id — пусть pointerup/ cancel сделают это
+//   } else {
+//     // touch fallback
+//     container.addEventListener('touchstart', function (e) {
+//       if (!e.touches) return;
+//       if (e.touches.length >= 2) {
+//         // добавим все touch identifiers на всякий случай
+//         for (let i = 0; i < e.touches.length; i++) pointerSet.add(e.touches[i].identifier);
+//         onPinchStart();
+//       }
+//     }, { capture: true, passive: true });
+
+//     const touchEndHandler = function (e) {
+//       // удаляем завершившиеся touches
+//       if (e.changedTouches) {
+//         for (let i = 0; i < e.changedTouches.length; i++) {
+//           const id = e.changedTouches[i].identifier;
+//           pointerSet.delete(id);
+//         }
+//       }
+//       // если больше не осталось — завершаем
+//       if ((e.touches && e.touches.length) < 2) {
+//         onPinchEnd();
+//       } else {
+//         startWatchdog();
+//       }
+//     };
+
+//     container.addEventListener('touchend', touchEndHandler, { capture: true, passive: true });
+//     container.addEventListener('touchcancel', touchEndHandler, { capture: true, passive: true });
+
+//     // document-level для падений вне контейнера
+//     document.addEventListener('touchend', touchEndHandler, { capture: true, passive: true });
+//     document.addEventListener('touchcancel', touchEndHandler, { capture: true, passive: true });
+//   }
+
+//   // если страница скрыта или уход — очищаем состояния
+//   const cleanupOnHide = function() {
+//     if (pointerSet.size > 0) pointerSet.clear();
+//     if (pinchActive) {
+//       pinchActive = false;
+//       try { rubberband.setEnabled(true); } catch(e){}
+//       removeMouseBlocker();
+//     }
+//     clearWatchdog();
+//   };
+//   document.addEventListener('visibilitychange', function() { if (document.hidden) cleanupOnHide(); }, { passive: true });
+//   window.addEventListener('pagehide', cleanupOnHide, { passive: true });
+//   window.addEventListener('blur', cleanupOnHide, { passive: true });
+
+//   // Защита: если какой-то обработчик пытается стартануть rubberband через mouseDown,
+//   // то мы не дадим это сделать пока pinchActive === true.
+//   // Переопределяем метод mouseDown один раз.
+//   if (!mxRubberband.__mouseDownPatched) {
+//     const originalMouseDown = mxRubberband.prototype.mouseDown;
+//     mxRubberband.prototype.mouseDown = function(sender, me) {
+//       try {
+//         if (pinchActive || mxEvent.isMultiTouchEvent(me.getEvent())) {
+//           try { if (this.first != null) this.reset(); } catch(e){}
+//           return;
+//         }
+//       } catch (e) {
+//         // fallthrough to original
+//       }
+//       return originalMouseDown.apply(this, arguments);
+//     };
+//     mxRubberband.__mouseDownPatched = true;
+//   }
+
+//   // Экспорт полезной функции для ручного восстановления (например, из консоли)
+//   graph.__rubberbandGuard = graph.__rubberbandGuard || {};
+//   graph.__rubberbandGuard.forceEnable = function() {
+//     try { rubberband.reset(); } catch(e){}
+//     try { rubberband.setEnabled(true); } catch(e){}
+//     pointerSet.clear();
+//     pinchActive = false;
+//     removeMouseBlocker();
+//     clearWatchdog();
+//     console.log('rubberband: forced enabled by graph.__rubberbandGuard.forceEnable()');
+//   };
+  
+  
+
+// })(graph, rubberband);
+
+
+ setupOneFingerPanGuarded(graph, container, { threshold: 6, allowMouse: false },connectorsApi);
+
+   
+    
     // Alternative solution for implementing connection points without child cells.
     // This can be extended as shown in portrefs.html example to allow for per-port
     // incoming/outgoing direction.
@@ -1957,7 +2306,8 @@ function main(flag)
             }
         }
     });
-
+    
+    graph.tolerance = 1
     // Adds an option to view the XML of the graph
     document.getElementById('buttons').appendChild(mxUtils.button(translator.calculate_button, function()
     {
@@ -2062,7 +2412,7 @@ function main(flag)
     // } catch (e) {
     //     console.warn('[mouseUp] Error caught:', e);
     // }
-        console.log('Сработал mouseUp в Handler')
+        // console.log('Сработал mouseUp в Handler')
         if (this.first != null && this.previous != null)
         {
             var point = mxUtils.convertPoint(this.graph.container, me.getX(), me.getY());
@@ -2630,13 +2980,17 @@ function readDirectionAngle(state) {
   }
 
   activeTouch = false;
-  console.log('[RESET] 🧹 Полный сброс состояния connectionHandler');
+  // console.log('[RESET] 🧹 Полный сброс состояния connectionHandler');
 }
 
 
 
 container.addEventListener('touchstart', function (event) {
   if (event.touches.length === 0) return;
+  if (event.touches && event.touches.length === 2) {
+  // если используешь кастомный pinch — не делать ничего в этом обработчике
+  return; // или event.preventDefault(); в зависимости от логики
+}
 
   const touch = event.touches[0];
   const touchPt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
@@ -2723,14 +3077,14 @@ if (!hasArrows) {
   requestAnimationFrame(() => {
     if (container.querySelector(selector)) {
       // стрелки появились — продолжаем (повторный start)
-      console.log('[TOUCHSTART] arrows appeared during rAF — proceeding to start');
+      // console.log('[TOUCHSTART] arrows appeared during rAF — proceeding to start');
       resetHandler(handler);
       handler.sourceConstraint = matchedConstraint;
       handler.start(matchedState, matchedConstraint);
       activeTouch = true;
       logHandlerState('TOUCHSTART - AFTER START (rAF path)');
     } else {
-      console.log('[TOUCHSTART] no arrows for cell -> abort start');
+      // console.log('[TOUCHSTART] no arrows for cell -> abort start');
     }
   });
 
@@ -2738,7 +3092,7 @@ if (!hasArrows) {
   return;
 }
 
-    console.log('[TOUCHSTART] ✅ Найден matchedConstraint (наружная зона или стрелка)', matchedConstraint);
+    // console.log('[TOUCHSTART] ✅ Найден matchedConstraint (наружная зона или стрелка)', matchedConstraint);
     resetHandler(handler); // твоя функция
     requestAnimationFrame(() => {
       handler.sourceConstraint = matchedConstraint;
@@ -2750,60 +3104,17 @@ if (!hasArrows) {
   } else {
     // не найдено: если есть висящий preview — сбрасываем, иначе ничего
     if (isPreviewVisible) {
-      console.log('[TOUCHSTART] ❌ нет совпадения, сбрасываем висящий preview');
+      // console.log('[TOUCHSTART] ❌ нет совпадения, сбрасываем висящий preview');
       resetHandler(handler);
     } else {
-      console.log('[TOUCHSTART] ❌ нет совпадения и нет preview');
+      // console.log('[TOUCHSTART] ❌ нет совпадения и нет preview');
     }
   }
 
   logHandlerState('TOUCHSTART - END');
 }, { passive: false });
 
-
-
-  container.addEventListener('touchend', function (event) {
-  if (!activeTouch) return;
-  const touch = event.changedTouches[0];
-  const touchPt = mxUtils.convertPoint(graph.container, touch.clientX, touch.clientY);
-
-  // --- ищем ближайший порт (увеличенный радиус)
-  const SNAP_RADIUS = 100; // ← вот этим управляешь "легкостью попадания"
-  let snapX = touchPt.x;
-  let snapY = touchPt.y;
-
-  const parent = graph.getDefaultParent();
-  const vertices = graph.getChildVertices(parent) || [];
-  outer: for (const v of vertices) {
-    const state = graph.getView().getState(v);
-    if (!state) continue;
-    const constraints = graph.getAllConnectionConstraints(state) || [];
-    for (const c of constraints) {
-      if (!c?.point) continue;
-      const pos = computePortAndArrow(state, c);
-      const dPort = Math.hypot(pos.portX - touchPt.x, pos.portY - touchPt.y);
-      if (dPort <= SNAP_RADIUS) {
-        snapX = pos.portX;
-        snapY = pos.portY;
-        console.log("[TOUCHEND] 🎯 Привязали к ближайшему порту", c.point);
-        break outer;
-      }
-    }
-  }
-
-  // --- отправляем скорректированную позицию
-  const mouseEvent = new MouseEvent('mouseup', {
-    clientX: snapX,
-    clientY: snapY,
-    bubbles: true,
-    cancelable: true,
-    view: window
-  });
-  container.dispatchEvent(mouseEvent);
-
-  activeTouch = false;
-  logHandlerState('TOUCHEND');
-}, { passive: false });
+ 
 
 
 }
@@ -2954,6 +3265,7 @@ const hitRadius = 40;
     const img = document.createElement('img');
 
     img.src    = 'src/images/arrow-up.svg';
+    // img.classList.add('connector-arrow');
     img.className = 'connector-arrow'; 
 img.dataset.cellId = cell.id;
     img.draggable = false;
@@ -3158,13 +3470,6 @@ let cursorActive = false;
 // });
   
 
-
-        
-
-        
-//       }
-//     }
-//   }, { passive: false });
   
   function forceClear() {
   hoverCell = null;
@@ -3190,6 +3495,12 @@ graph.connectionHandler.addListener(mxEvent.RESET, forceClear);
   }, { passive: false });
 
   
+  // удаление
+  container.addEventListener('touchstart', (event) => {
+    if( event.touches.length ==2 )
+     {forceClear();}
+
+  });
 
   
   
@@ -3232,3 +3543,625 @@ graph.connectionHandler.addListener(mxEvent.RESET, () => {
   }
 
  
+  function setupPinchZoom(graph, container, opts = {}) {
+  const minScale = opts.minScale ?? 0.2;
+  const maxScale = opts.maxScale ?? 4;
+  const start = { dist: 0, scale: null, cx: 0, cy: 0 };
+  let pinching = false;
+  let scheduled = false;
+  let targetScale = null;
+
+  function dist(t1, t2) {
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function midPoint(t1, t2) {
+    return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+  }
+
+  function applyZoom() {
+    scheduled = false;
+    if (targetScale == null) return;
+
+    const s = Math.max(minScale, Math.min(maxScale, targetScale));
+
+    // Попробуем использовать graph.zoomTo(scale, centerFlag) если доступно
+    try {
+      if (typeof graph.zoomTo === 'function') {
+        // Попытка центрации — многие реализации поддерживают второй аргумент
+        graph.zoomTo(s, true);
+      } else {
+        // Fallback: изменяем view.scale и валидируем.
+        const view = graph.getView();
+        if (view) {
+          // Если хотим сохранить точку (start.cx,start.cy) под пальцами,
+          // можно реализовать постановку translate — для простоты используем zoom без translate.
+          view.scale = s;
+          view.revalidate ? view.revalidate() : view.validate();
+        }
+      }
+    } catch (err) {
+      // безопасный fallback
+      const view = graph.getView();
+      if (view) {
+        view.scale = s;
+        view.revalidate ? view.revalidate() : view.validate();
+      }
+    }
+  }
+
+
+  
+  container.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      // захватили pinch — отменяем дальнейшую обработку страницей
+      e.preventDefault();
+      pinching = true;
+      start.dist = dist(e.touches[0], e.touches[1]);
+      start.scale = (graph.view && graph.view.scale) ? graph.view.scale : 1;
+      const m = midPoint(e.touches[0], e.touches[1]);
+      start.cx = m.x; start.cy = m.y;
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchmove', e => {
+    if (!pinching || e.touches.length !== 2) return;
+    e.preventDefault();
+
+    const cur = dist(e.touches[0], e.touches[1]);
+    if (start.dist <= 0) return;
+    const ratio = cur / start.dist;
+    targetScale = start.scale * ratio;
+    if (!scheduled) {
+      scheduled = true;
+      requestAnimationFrame(applyZoom);
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchend', e => {
+    if (pinching && e.touches.length < 2) {
+      // завершаем pinch
+      pinching = false;
+      targetScale = null;
+    }
+  }, { passive: false });
+
+
+  
+(function installZoomCleanup(graph, container) {
+
+  // параметры
+  const DEBOUNCE_MS = 200;
+
+  let _iconsCleared = false;
+  let _clearTimer = null;
+
+  function removeIconsAndArrowsOnce() {
+    // 1) если есть реестр iconSets — корректно их уничтожим
+    try {
+      if (graph._iconSets && Array.isArray(graph._iconSets) && graph._iconSets.length) {
+        for (let i = 0; i < graph._iconSets.length; i++) {
+          try { if (typeof graph._iconSets[i].destroy === 'function') graph._iconSets[i].destroy(); } catch(e){}
+        }
+        // очистим реестр
+        graph._iconSets.length = 0;
+      }
+    } catch(e) {
+      console.warn('removeIconsAndArrows: error destroying graph._iconSets', e);
+    }
+
+    // 2) удалим все DOM-иконки и стрелки (доп. страховка)
+    try {
+      const nodes = container.querySelectorAll('.mx-icon, .connector-arrow');
+      nodes.forEach(n => { if (n && n.parentNode) { try { n.parentNode.removeChild(n); } catch(e){} } });
+    } catch(e) {
+      console.warn('removeIconsAndArrows: error removing DOM nodes', e);
+    }
+
+    // 3) если есть внешний объект коннекторов — почистим его внутренние состояния (опционально)
+    try {
+      if (graph._connectors) {
+        if (typeof graph._connectors.clear === 'function') {
+          graph._connectors.clear();
+        } else if (typeof graph._connectors.close === 'function') {
+          graph._connectors.close();
+        }
+        // если хранишь стрелки внутри, почисти массив, если нужно:
+        if (Array.isArray(graph._connectors._arrows)) graph._connectors._arrows.length = 0;
+      }
+    } catch(e) {
+      // не критично
+    }
+  }
+
+  // SCALE listener — удаляем иконки один раз в начале жеста, сбрасываем флаг после debounce
+  const scaleListener = graph.getView().addListener(mxEvent.SCALE, function() {
+    if (!_iconsCleared) {
+      _iconsCleared = true;
+      removeIconsAndArrowsOnce();
+    }
+
+    // debounce: через DEBOUNCE_MS без SCALE — считаем жест законченным, разрешаем следующий удалять
+    if (_clearTimer) {
+      clearTimeout(_clearTimer);
+    }
+    _clearTimer = setTimeout(function() {
+      _iconsCleared = false;
+      _clearTimer = null;
+    }, DEBOUNCE_MS);
+  });
+
+  // Верни слушатель, если захочешь снять позже
+  return {
+    removeListener() {
+      try { graph.getView().removeListener(scaleListener); } catch(e){}
+    }
+  };
+
+})(graph, graph.container);
+
+  // Возвращаем контролы, если нужно управлять извне
+  return {
+    isPinching: () => pinching
+  };
+}
+
+
+
+
+function setupOneFingerPanGuarded(graph, container, opts = {}, connectorsApi) {
+  const THRESH = opts.threshold ?? 6;
+  const HOLD_MS = opts.holdMs ?? 400;     // удержание для переключения в rubber
+  const HOLD_MOVE_TOL = opts.holdMoveTol ?? 8;
+  const allowMouse = !!opts.allowMouse;
+  const handler = graph.connectionHandler;
+
+  // state
+  const pointerSet = new Set();
+  let panCandidate = false, panning = false, panPointerId = null;
+  let startClientX = 0, startClientY = 0, startTx = 0, startTy = 0;
+
+  // hold state
+  let holdTimer = null;
+  let holdStartX = 0, holdStartY = 0;
+  let rubberFromHold = false;
+
+  function clearHoldTimer() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+  }
+  
+let lastClientX = 0, lastClientY = 0; // добавить в область видимости функции setupOneFingerPanGuarded
+
+function startRubberAt(clientX, clientY) {
+  const rubber = graph._rubberband;
+  if (!rubber) return;
+
+  // переводим координаты в систему графа (container)
+  const p = mxUtils.convertPoint(graph.container, clientX, clientY);
+
+  console.log('[rubberband] start at client=', clientX, clientY, 'graph=', p.x, p.y);
+
+  // сбросим любую остаточную визуалку
+  try { if (rubber.first != null) rubber.reset(); } catch(e){}
+
+  // очистим подсказки
+  try { connectorsApi && connectorsApi.clear && connectorsApi.clear(); } catch(e){}
+
+  try {
+    // Запускаем rubber вручную (graph coords)
+    rubber.start(p.x, p.y);
+    rubberFromHold = true;
+
+    // сохраняем последние клиентские координаты для дальнейшего обновления/файналайза
+    lastClientX = clientX;
+    lastClientY = clientY;
+  } catch (err) {
+    rubberFromHold = false;
+    console.warn('[rubberband] startRubberAt failed', err);
+  }
+}
+function finalizeRubber(e) {
+  const rubber = graph._rubberband;
+  if (!rubber || !rubberFromHold) return;
+
+  // используем последние клиентские координаты (должны обновляться в move)
+  let clientX = lastClientX, clientY = lastClientY;
+  if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+    clientX = e.clientX; clientY = e.clientY;
+  }
+
+  console.log('[rubberband] finalize, rubber.first=', rubber.first,
+              'rubber.current=', rubber.currentX, rubber.currentY,
+              'client=', clientX, clientY,
+              'view.scale=', graph.view && graph.view.scale,
+              'translate=', graph.view && graph.view.translate);
+
+  try {
+    // Создаём DOM MouseEvent и mxMouseEvent как раньше
+    let domEvt;
+    try {
+      domEvt = new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX, clientY });
+    } catch (err) {
+      domEvt = { clientX, clientY, preventDefault: () => {}, stopPropagation: () => {} };
+    }
+
+    let me;
+    try {
+      me = new mxMouseEvent(domEvt, graph);
+    } catch (err) {
+      me = domEvt;
+    }
+
+    // ВЫЗЫВАЕМ execute — это должно обновить модель выбора
+    if (typeof rubber.execute === 'function') {
+      rubber.execute(me);
+    }
+    // После успешного rubber.execute(me) — закрепляем selection и включаем защиту
+try {
+  const sel = graph.getSelectionCells ? graph.getSelectionCells() : [];
+  // Повторно назначаем selection (подстраховка)
+  if (sel && sel.length > 0) {
+    try {
+      graph.setSelectionCells && graph.setSelectionCells(sel);
+      // Иногда полезно повторить назначение в следующем тике — чтобы переотрисовать handler/ручки
+      setTimeout(() => {
+        try { graph.setSelectionCells && graph.setSelectionCells(sel); } catch(e){}
+      }, 0);
+    } catch (e) {
+      console.warn('[rubberband] setSelectionCells failed', e);
+    }
+
+    // Устанавливаем флаг чтобы mxGraph.click временно ничего не трогал
+    try {
+      graph.__suppressClickAfterRubber = Date.now();
+    } catch(e) {}
+  }
+} catch(e) {
+  console.warn('selection-protect error', e);
+}
+    // --- DIAGNOSTИКА: лог сразу после execute ---
+    try {
+      const selNow = graph.getSelectionCells ? graph.getSelectionCells() : [];
+      console.log('[rubberband] after execute - model selection count =', selNow.length, selNow);
+    } catch (err) {
+      console.warn('[rubberband] cant read selection after execute', err);
+    }
+
+    // --- Защита: повторно устанавливаем выбор и временно блокируем mouse down events ---
+    try {
+      const sel = graph.getSelectionCells ? graph.getSelectionCells() : [];
+      if (sel && sel.length > 0) {
+        // Повторно применяем selection (иногда это "оживляет" UI)
+        graph.setSelectionCells && graph.setSelectionCells(sel);
+
+        // Установим кратковременный блокер synthetic mouse/click, чтобы другие обработчики не сняли выбор
+        const blockMs = 250; // можно подстроить (200..400)
+        const blocker = function(evt) {
+          try { evt.stopImmediatePropagation && evt.stopImmediatePropagation(); } catch(e){}
+          // не вызываем preventDefault
+        };
+        document.addEventListener('mousedown', blocker, true);
+        document.addEventListener('click', blocker, true);
+
+        // удалим blocker через небольшое время
+        setTimeout(() => {
+          try {
+            document.removeEventListener('mousedown', blocker, true);
+            document.removeEventListener('click', blocker, true);
+          } catch(e) {}
+        }, blockMs);
+
+        console.log('[rubberband] selection protected for', blockMs, 'ms; selCount=', sel.length);
+      } else {
+        console.log('[rubberband] no selection to protect (sel length 0)');
+      }
+    } catch (err) {
+      console.warn('[rubberband] select-protect failed', err);
+    }
+
+  } catch (ex) {
+    console.error('[rubberband] execute error', ex);
+  } finally {
+    try { rubber.reset && rubber.reset(); } catch (ex) { console.warn('[rubberband] reset failed', ex); }
+    rubberFromHold = false;
+  }
+}
+  // helpers (из твоей реализации)
+  function getLabelInnerDivAt(clientX, clientY) {
+    const elems = (document.elementsFromPoint && document.elementsFromPoint(clientX, clientY))
+      || [document.elementFromPoint(clientX, clientY)];
+    for (const el of elems) {
+      if (!el) continue;
+      let fo = el;
+      while (fo && fo.nodeName && fo.nodeName.toLowerCase() !== 'foreignobject') {
+        fo = fo.parentElement;
+      }
+      if (!fo) {
+        const lbl = el.closest && el.closest('.mxCellLabel');
+        if (lbl) return lbl;
+        continue;
+      }
+      const level1 = fo.firstElementChild;
+      const level2 = level1 && level1.firstElementChild;
+      if (level2) {
+        const txt = (level2.textContent || '').trim();
+        if (txt.length > 0) return level2;
+        return level2;
+      }
+    }
+    return null;
+  }
+  function isOverLabelAt(x,y) { return !!getLabelInnerDivAt(x,y); }
+  function isOverArrowAt(x,y) {
+    const el = document.elementFromPoint(x,y);
+    return !!(el && (el.classList && el.classList.contains('connector-arrow') || el.closest && el.closest('.connector-arrow')));
+  }
+  function isOverVertexAt(x,y) {
+    const pt = mxUtils.convertPoint(graph.container, x, y);
+    const cell = graph.getCellAt(pt.x, pt.y);
+    return !!(cell && graph.getModel().isVertex(cell));
+  }
+  function isOverInteractiveAt(x,y) {
+    const el = document.elementFromPoint(x,y);
+    if (el && el.closest && el.closest('.connector-arrow')) return true;
+    if (isOverLabelAt(x,y)) return true;
+    if (el && el.closest && el.closest('.mxCellLabel')) return true;
+    if (el && (el.isContentEditable || el.classList && el.classList.contains('mxPlainTextEditor'))) return true;
+    return false;
+  }
+  function hasActiveConnection() {
+    return !!(handler && (handler.first || handler.shape || handler.edgeState));
+  }
+
+  function startCandidate(e) {
+    if (pointerSet.size !== 1) { panCandidate = false; return; }
+    if (isOverVertexAt(e.clientX, e.clientY) || isOverInteractiveAt(e.clientX, e.clientY) ||
+        isOverArrowAt(e.clientX, e.clientY) || hasActiveConnection()) {
+      panCandidate = false; return;
+    }
+
+    panCandidate = true;
+    panning = false;
+    panPointerId = e.pointerId ?? null;
+    startClientX = e.clientX; startClientY = e.clientY;
+    startTx = graph.view.translate.x; startTy = graph.view.translate.y;
+
+    // ставим временную блокировку автоматического mouseDown для mxRubberband
+    try { mxRubberband.__blockedUntil = Date.now() + HOLD_MS; } catch(e){}
+
+    // запоминаем координаты hold
+    holdStartX = e.clientX; holdStartY = e.clientY;
+
+    // стартуем таймер удержания
+    clearHoldTimer();
+    holdTimer = setTimeout(() => {
+      // если не двигались сильно и всё ещё одиночный указатель и пан не стартовал — запускаем rubber вручную
+      if (panCandidate && !panning && pointerSet.size === 1 && !hasActiveConnection()) {
+        startRubberAt(holdStartX, holdStartY);
+      }
+      clearHoldTimer();
+    }, HOLD_MS);
+  }
+
+  function maybeActivate(e) {
+    if (!panCandidate) return;
+    if (panPointerId != null && e.pointerId !== panPointerId) return;
+
+    // если rubberFromHold активен — не запускаем пан
+    if (rubberFromHold) { panCandidate = false; return; }
+
+    const dx = Math.abs(e.clientX - startClientX), dy = Math.abs(e.clientY - startClientY);
+    if (dx > THRESH || dy > THRESH) {
+      // движение — отменяем hold и запускаем пан
+      clearHoldTimer();
+      try { mxRubberband.__blockedUntil = 0; } catch(e){}
+      if (isOverVertexAt(e.clientX, e.clientY) || isOverArrowAt(e.clientX, e.clientY) || isOverInteractiveAt(e.clientX, e.clientY) || hasActiveConnection()) {
+        panCandidate = false; return;
+      }
+      panning = true;
+      panCandidate = false;
+      try { connectorsApi && connectorsApi.clear && connectorsApi.clear(); } catch(e){}
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (e.stopPropagation) e.stopPropagation();
+      doPan(e);
+    }
+  }
+
+  function doPan(e) {
+    if (!panning) return;
+    const dx = e.clientX - startClientX;
+    const dy = e.clientY - startClientY;
+    graph.view.setTranslate(startTx + dx, startTy + dy);
+    try { connectorsApi && connectorsApi.clear && connectorsApi.clear(); } catch(e){}
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    if (e.stopPropagation) e.stopPropagation();
+  }
+
+  function endPan(e) {
+    panCandidate = false;
+    if (panning) {
+      panning = false;
+      panPointerId = null;
+      if (e) {
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        if (e.stopPropagation) e.stopPropagation();
+      }
+    }
+
+    // если rubber был запущен через hold — финализируем
+    if (rubberFromHold) {
+      finalizeRubber(e);
+    }
+
+    clearHoldTimer();
+    // снимем блокировку на всякий случай
+    try { mxRubberband.__blockedUntil = 0; } catch(e){}
+    rubberFromHold = false;
+  }
+
+  // Pointer events
+  if (window.PointerEvent) {
+    container.addEventListener('pointerdown', function(e) {
+      if (!(e.pointerType === 'touch' || (allowMouse && e.pointerType === 'mouse'))) return;
+      pointerSet.add(e.pointerId);
+      if (pointerSet.size > 1) { panCandidate = false; panning = false; clearHoldTimer(); return; }
+      if (hasActiveConnection()) { panCandidate = false; return; }
+      startCandidate(e);
+    }, { capture: true });
+
+    container.addEventListener('pointermove', function(e) {
+      if (holdTimer) {
+        const mdx = Math.abs(e.clientX - holdStartX), mdy = Math.abs(e.clientY - holdStartY);
+        if (mdx > HOLD_MOVE_TOL || mdy > HOLD_MOVE_TOL) {
+          clearHoldTimer();
+          // если движемся — снимем блокировку
+          try { mxRubberband.__blockedUntil = 0; } catch(e){}
+        }
+      }
+
+      if (!pointerSet.has(e.pointerId)) return;
+      if (pointerSet.size > 1) { panCandidate = false; panning = false; clearHoldTimer(); return; }
+      if (hasActiveConnection()) { endPan(e); return; }
+      // Обновляем rubber (если он запущен вручную по удержанию)
+if (rubberFromHold) {
+  try {
+    lastClientX = e.clientX;
+    lastClientY = e.clientY;
+    const p = mxUtils.convertPoint(graph.container, lastClientX, lastClientY);
+    const rubber = graph._rubberband;
+    if (rubber && typeof rubber.update === 'function') {
+      rubber.update(p.x, p.y); // обновит currentX/currentY и перерисует div
+    }
+  } catch (err) {
+    console.warn('[rubberband] update failed', err);
+  }
+}
+
+      if (panning) doPan(e); else maybeActivate(e);
+    }, { capture: true });
+
+    container.addEventListener('pointerup', function(e) {
+      pointerSet.delete(e.pointerId);
+      endPan(e);
+    }, { capture: true });
+    container.addEventListener('pointercancel', function(e) {
+      pointerSet.delete(e.pointerId);
+      endPan(e);
+    }, { capture: true });
+    container.addEventListener('pointerleave', function(e) {
+      pointerSet.delete(e.pointerId);
+      endPan(e);
+    }, { capture: true });
+  } else {
+    // touch fallback
+    let activeId = null;
+    container.addEventListener('touchstart', function(ev) {
+      if (!ev.touches || ev.touches.length !== 1) { panCandidate = false; panning = false; clearHoldTimer(); return; }
+      const t = ev.touches[0];
+      if (hasActiveConnection()) { panCandidate = false; return; }
+      if (isOverVertexAt(t.clientX, t.clientY) || isOverArrowAt(t.clientX, t.clientY) || isOverInteractiveAt(t.clientX, t.clientY)) { panCandidate = false; return; }
+      activeId = t.identifier;
+      panCandidate = true;
+      panning = false;
+      startClientX = t.clientX; startClientY = t.clientY;
+      startTx = graph.view.translate.x; startTy = graph.view.translate.y;
+
+      // hold
+      holdStartX = t.clientX; holdStartY = t.clientY;
+      clearHoldTimer();
+      holdTimer = setTimeout(() => {
+        if (panCandidate && !panning && !hasActiveConnection()) {
+          startRubberAt(holdStartX, holdStartY);
+        }
+        clearHoldTimer();
+      }, HOLD_MS);
+    }, { capture: true, passive: false });
+
+    container.addEventListener('touchmove', function(ev) {
+      if (holdTimer && ev.touches && ev.touches.length > 0) {
+        const t0 = ev.touches[0];
+        const mdx = Math.abs(t0.clientX - holdStartX), mdy = Math.abs(t0.clientY - holdStartY);
+        if (mdx > HOLD_MOVE_TOL || mdy > HOLD_MOVE_TOL) {
+          clearHoldTimer();
+          try { mxRubberband.__blockedUntil = 0; } catch(e){}
+        }
+      }
+
+      if (rubberFromHold && ev.touches && ev.touches.length > 0) {
+  try {
+    const t = ev.touches[0];
+    lastClientX = t.clientX;
+    lastClientY = t.clientY;
+    const p = mxUtils.convertPoint(graph.container, lastClientX, lastClientY);
+    const rubber = graph._rubberband;
+    if (rubber && typeof rubber.update === 'function') {
+      rubber.update(p.x, p.y);
+    }
+  } catch (err) {
+    console.warn('[rubberband] touch update failed', err);
+  }
+}
+
+      if (!panCandidate && !panning) return;
+      const touches = ev.touches;
+      if (!touches || touches.length !== 1) { panCandidate = false; panning = false; clearHoldTimer(); return; }
+      const t = touches[0];
+      if (t.identifier !== activeId) return;
+      if (hasActiveConnection()) { endPan(); return; }
+
+      if (!panning) {
+        const dx = Math.abs(t.clientX - startClientX), dy = Math.abs(t.clientY - startClientY);
+        if (dx > THRESH || dy > THRESH) {
+          clearHoldTimer();
+          try { mxRubberband.__blockedUntil = 0; } catch(e){}
+          if (isOverVertexAt(t.clientX, t.clientY) || isOverArrowAt(t.clientX, t.clientY)) { panCandidate = false; return; }
+          panning = true;
+          panCandidate = false;
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          if (ev.stopPropagation) ev.stopPropagation();
+        }
+      }
+
+      if (panning) {
+        graph.view.setTranslate(startTx + (t.clientX - startClientX), startTy + (t.clientY - startClientY));
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        if (ev.stopPropagation) ev.stopPropagation();
+      }
+    }, { capture: true, passive: false });
+
+    container.addEventListener('touchend', function(ev) {
+      // если rubber оказался запущен через hold, finalize
+      if (rubberFromHold) {
+        const rubber = graph._rubberband;
+        try { if (rubber && typeof rubber.execute === 'function') rubber.execute && rubber.execute(null); } catch(e){}
+        try { rubber && rubber.reset && rubber.reset(); } catch(e){}
+        rubberFromHold = false;
+      }
+      activeId = null;
+      clearHoldTimer();
+      try { mxRubberband.__blockedUntil = 0; } catch(e){}
+      endPan();
+    }, { capture: true });
+
+    container.addEventListener('touchcancel', function(ev) {
+      activeId = null;
+      clearHoldTimer();
+      try { mxRubberband.__blockedUntil = 0; } catch(e){}
+      endPan();
+    }, { capture: true });
+  }
+
+  // Если соединение стартует где-то ещё — отменяем pan / hold
+  if (handler) {
+    handler.addListener && handler.addListener(mxEvent.START, function() { panCandidate = false; endPan(); });
+    handler.addListener && handler.addListener(mxEvent.CONNECT, function() { panCandidate = false; endPan(); });
+    handler.addListener && handler.addListener(mxEvent.RESET, function() { panCandidate = false; endPan(); });
+  }
+
+  return {
+    isRubberFromHold: () => !!rubberFromHold,
+    isPanning: () => !!panning
+  };
+}

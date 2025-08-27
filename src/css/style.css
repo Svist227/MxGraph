@@ -80,6 +80,7 @@ div.mx-container {
     -webkit-user-select: none;
   user-select: none;
   touch-action: none;
+  -ms-touch-action: none;
 }
 
 div.mx-properties {
@@ -155,4 +156,9 @@ div.mxRubberband {
 	border-width: 1px;
 	border-color: #0000FF;
 	background: #0077FF;
+}
+
+
+.mxCellLabel {
+  pointer-events: auto; /* чтобы elementFromPoint видел метки */
 }
