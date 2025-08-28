@@ -60,7 +60,7 @@ div.mx-buttons {
 
 div.mx-buttons button {
     display: inline-block;
-    /* float: left; */
+    float: left;
     width: 93%;
     margin: 2px;
     font-size: 11px;
@@ -126,27 +126,42 @@ select.mx-select {
 .mx_button_img {
     height: 24px !important;
     width: 24px !important;
-    margin: 0px 0px 0px -4px !important;
+    margin: 0px 0px 0px  !important;
     max-width: 24px;
     max-height: 24px;
 }
 
 .mx_button {
-    right: 27px !important;
+
     height: 27px !important;
-    width: 27px !important;
+    width: 26px !important;
     background-color: white !important;
     border: inherit;
     padding: 0;
+    position: relative;
+    
+  
 }
 
 .mx_input {
-    width: 0px;
-    margin: 0px -10px -10px 0px;
+    /* width: 0px;
+    margin: 0px -10px -10px 0px; */
+    position: absolute;
+  left: -9999px; /* полностью убираем с экрана */
 }
 
 .mx_label {
-    margin: 0px -10px 0px 4px;
+    /* margin: 0px -10px 0px 4px; */
+    margin:0 0 0 1px;
+    display: inline-block;
+     height: 25px !important;
+    width: 24px !important;
+    background-color: white !important;
+    border: inherit;
+    padding: 0;
+    position: relative;
+    
+    
 }
 
 div.mxRubberband {
