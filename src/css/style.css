@@ -52,18 +52,31 @@ div img.mxToolbarMode {
 
 
 div.mx-buttons {
-    overflow: hidden;
-    padding: 1px;
-    width: 100%;
-    z-index: 9999;
+  display: flex;
+  flex-direction: column; /* кнопки одна под другой */
+  gap: 4px;               /* расстояние между кнопками */
+  width: 100%;
 }
 
 div.mx-buttons button {
-    display: inline-block;
-    float: left;
+    display: block;          /* вместо inline-block + float */
+  width: 100%;             /* кнопка на всю ширину контейнера */
+  margin: 2px 0;
+  
     width: 93%;
     margin: 2px;
     font-size: 11px;
+    -webkit-appearance: none; /* убираем дефолтный стиль Safari */
+  appearance: none;
+
+  border: 1px solid #ccc;  /* подгони под дизайн */
+  border-radius: 4px;
+
+    
+  font-size: 11px;
+  padding: 6px 6px;        /* свои внутренние отступы */
+  text-align: center;        /* текст строго к левому краю */
+
 }
 
 /* Изменение параметров */
