@@ -2161,39 +2161,39 @@ if (!mxRubberband.__mouseDownPatched) {
         return graph.connectionHandler.isConnectableCell(cell);
     };
 
-    var getTooltipForCell = graph.getTooltipForCell;
+    // var getTooltipForCell = graph.getTooltipForCell;
 
-    graph.getTooltipForCell = function(cell)
-    {
-        var tip = '';
+    // graph.getTooltipForCell = function(cell)
+    // {
+    //     var tip = '';
 
-        if (cell != null)
-        {
-            var src = this.getModel().getTerminal(cell, true);
+    //     if (cell != null)
+    //     {
+    //         var src = this.getModel().getTerminal(cell, true);
 
-            if (src != null)
-            {
-                tip += this.getTooltipForCell(src) + ' ';
-            }
+    //         if (src != null)
+    //         {
+    //             tip += this.getTooltipForCell(src) + ' ';
+    //         }
 
-            var parent = this.getModel().getParent(cell);
+    //         var parent = this.getModel().getParent(cell);
 
-            if (this.getModel().isVertex(parent))
-            {
-                tip += this.getTooltipForCell(parent) + '.';
-            }
+    //         if (this.getModel().isVertex(parent))
+    //         {
+    //             tip += this.getTooltipForCell(parent) + '.';
+    //         }
 
-            tip += getTooltipForCell.apply(this, arguments);
+    //         tip += getTooltipForCell.apply(this, arguments);
 
-            var trg = this.getModel().getTerminal(cell, false);
+    //         var trg = this.getModel().getTerminal(cell, false);
 
-            if (trg != null)
-            {
-                tip += ' ' + this.getTooltipForCell(trg);
-            }
-        }
-        return tip;
-    };
+    //         if (trg != null)
+    //         {
+    //             tip += ' ' + this.getTooltipForCell(trg);
+    //         }
+    //     }
+    //     return tip;
+    // };
 
     graph.getStylesheet().putDefaultEdgeStyle({
     edgeStyle: 'wireEdgeStyle',
@@ -2202,6 +2202,11 @@ if (!mxRubberband.__mouseDownPatched) {
     endArrow: 'block',
     html: false
 });
+
+graph.tolerance = 25; // 6..12
+if (graph.connectionHandler && graph.connectionHandler.constraintHandler) {
+  graph.connectionHandler.constraintHandler.tolerance = 25;
+}
 
     var labelBackground = '#FFFFFF';
     var fontColor = '#000000';
@@ -2668,7 +2673,7 @@ if (!mxRubberband.__mouseDownPatched) {
             }
         }
     }
-
+  
     /**
         * Creates the textfield for the given property.
     */

@@ -60,8 +60,8 @@ div.mx-buttons {
 
 div.mx-buttons button {
     display: inline-block;
-    float: left;
-    width: 54px;
+    /* float: left; */
+    width: 93%;
     margin: 2px;
     font-size: 11px;
 }
